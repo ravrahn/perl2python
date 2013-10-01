@@ -1,6 +1,5 @@
 #Assignment 1 - Perl2Python
-
-##Owen Cassidy
+Owen Cassidy
 
 ###The spec:
 
