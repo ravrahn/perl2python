@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-$hello = "hello!";
+$hello = "greetings!";
 
 print "$hello\n";
 
@@ -12,7 +12,17 @@ while ($i < 10) {
 	if ($i % 2 == 0) {
 		print "hi";
 	}
-	$i++
+	$i++;
 }
 
+# $i++ and i-- should not change in comments
+$a = "or in strings! $i-- i++"; # or inline comments! $hello $i++ i--
+$i--;
+
 print $i;
+
+@array = ();
+
+foreach $line (@array) {
+	# stuff;
+}
