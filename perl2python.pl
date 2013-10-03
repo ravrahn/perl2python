@@ -1,70 +1,97 @@
 #!/usr/bin/perl -w
 
-sub convertString {
-	# given a perl string (like "lorem ipsum $sit amet" get it?)
-	# converts it to a python string ("lorem ipsum " + $sit + "amet")
-	# does not convert variables
-	my ($string) = @_;
-	my $newString = $string;
-
-	$newString =~ s/"(.*)(\$[a-zA-Z0-9]+)(.*)"/"$1" + $2 + "$3"/g;
-
-	$newString =~ s/\s*\+?\s*""\s*\+?\s*//g;
-
-	return $newString;
-}
-
-@file = ();
-
-while ($line = <>) {
-	push @file, $line;
-}
-
-$indents = 0;
-
-foreach $line (@file) {
-	print "    " x $indents;
-	$newLine = "";
-	if ($line =~ /^\s*if\s*\((.*)\)\s*{\s*$/) {
-		$newLine = "if $1:";
-		$indents++;
-	} elsif ($line =~ /^\s*while\s*\((.*)\)\s*{\s*$/) {
-		$newLine = "while $1:";
-		$indents++;
-	} elsif ($line =~ /^\s*foreach\s*\$[a-zA-Z0-9]+\s*\((\@[a-zA-Z0-9]+)\)\s*{\s*$/){
-		$newLine = "for $1 in 2:";
-		$indents++;
-	} elsif ($line =~ /^\s*}\s*$/) {
-		$indents--;
+sub var {
+	my ($var) = @_;
+	if ($var =~ /($|@|%)([a-zA-Z][a-zA-Z0-9]+)/) {
+		return ($1, $2);
 	} else {
-		$newLine = $line;
-		chomp $newLine;
+		return $var;
 	}
-
-	# replace the hashbang
-	$newLine =~ s|^#!/usr/bin/perl( -w)?$|#!/usr/bin/python2.7 -u|;
-
-	# remove existing indents
-	$newLine =~ s/^\s*(.*)\s*$/$1/;
-
-	if ($newLine =~ /^\s*[^#]/) { # line is not a comment
-
-		# convert any strings in the line
-		$newLine =~ s/("[^"]*")/&convertString($1)/eg;
-
-		# remove sigils in variables
-		$newLine =~ s/(\$|@|%)([a-zA-Z0-9]+)/$2/g;
-
-		# change ++ to +=1
-		# and -- to -=1
-		$newLine =~ s/([a-zA-Z0-9]+)\+\+/$1 += 1/g;
-		$newLine =~ s/([a-zA-Z0-9]+)\-\-/$1 -= 1/g;
-
-		# remove trailing semicolons
-		$newLine =~ s/;\s*$//;
-	}
-
-	
-
-	print "$newLine\n";
 }
+
+sub PerlToList {
+	# converts a perl file, as an array of lines
+	# into a list-based language-independant
+	# recursive data structure.
+	my (@perl) = @_;
+	my @list;
+
+	foreach $i (0..$#perl) {
+		if ($perl[$i] =~ /^print\s*"([^"]*)"\s*;$/) { # print
+			my $newline;
+			my $str = $1;
+			if ($str =~ /\\n$/) {
+				$newline = 1;
+			} else {
+				$newline = 0;
+			}
+			if ($newline) {
+				$str =~ s/\\n$//;
+			}
+			$list[$i] = ["print", {"string"=>$str, "newline"=>$newline}];
+		} else {
+			if ($perl[$i] =~ /^#!/) {
+
+			} elsif ($perl[$i] =~ /^#/) {
+				$list[$i] = $perl[$i];
+			} else {
+				$list[$i] = "# " . $perl[$i];
+			}
+		}
+	}
+
+	return @list;
+}
+
+sub ListToPython {
+	# converts a list-based language-independant
+	# recursive data structure into a python file,
+	# as an array of lines
+	my (@list) = @_;
+	my @python = ();
+	my %imports;
+
+	foreach $i (0..$#list) {
+		my @statement = @{$list[$i]} if defined $list[$i];
+		if ((defined $statement[0]) and ($statement[0] eq "print")) {
+			my %args = %{$statement[1]};
+			if ($args{"newline"}) {
+				push @python, ("print \"" . $args{"string"} ."\"");
+			} else {
+				$imports{"sys"}++;
+				push @python, ("sys.stdout.write(\"" . $args{"string"} . "\")")
+			}
+		} else {
+			push @python, $list[$i];
+		}
+	}
+
+	unshift @python, "";
+
+	foreach $import (keys %imports) {
+		unshift @python, "import $import";
+	}
+
+	unshift @python, "#!/usr/bin/python2.7 -u";
+
+	return @python;
+}
+
+@perl = ();
+
+undef $/;
+
+$string = <>;
+
+# makes sure each statement and comment gets its own line
+$string =~ s/#/\n#/g;
+$string =~ s/;/;\n/g;
+$string =~ s/{/{\n/g;
+$string =~ s/}/\n}\n/g;
+$string =~ s/(\s*\n+\s*)+/\n/g;
+
+@perl = split "\n", $string;
+
+print join("\n", &ListToPython(&PerlToList(@perl)));
+
+print "\n";

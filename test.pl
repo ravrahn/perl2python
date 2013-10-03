@@ -9,10 +9,8 @@ print "hello\n";
 
 $i = 0;
 while ($i < 10) {
-	if ($i % 2 == 0) {
-		print "hi";
-	}
-	$i++;
+	if ($i % 2 == 0) {print "hi";}
+	$i++; $i--; $i++;
 }
 
 # $i++ and i-- should not change in comments
