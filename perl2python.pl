@@ -1,14 +1,5 @@
 #!/usr/bin/perl -w
 
-sub var {
-	my ($var) = @_;
-	if ($var =~ /($|@|%)([a-zA-Z][a-zA-Z0-9]+)/) {
-		return ($1, $2);
-	} else {
-		return $var;
-	}
-}
-
 sub PerlToList {
 	# converts a perl file, as an array of lines
 	# into a list-based language-independant
@@ -16,8 +7,9 @@ sub PerlToList {
 	my (@perl) = @_;
 	my @list;
 
-	foreach $i (0..$#perl) {
-		if ($perl[$i] =~ /^print\s*"([^"]*)"\s*;$/) { # print
+	while (@perl) {
+		my $item = shift @perl;
+		if ($item =~ /^print\s*"([^"]*)"\s*$/) { # print
 			my $newline;
 			my $str = $1;
 			if ($str =~ /\\n$/) {
@@ -28,14 +20,33 @@ sub PerlToList {
 			if ($newline) {
 				$str =~ s/\\n$//;
 			}
-			$list[$i] = ["print", {"string"=>$str, "newline"=>$newline}];
-		} else {
-			if ($perl[$i] =~ /^#!/) {
+			push @list, ["print", {"string"=>$str, "newline"=>$newline}];
+		} elsif ($item =~ /^(if|while)\s*\((.*?)\)\s*{/) {
+			my $ifwhile = $1;
+			my $statement = $2;
+			my @sublist = ();
+			my $endsToIgnore = 0;
+			while (1) {
+				my $subitem = shift @perl;
+				if ($subitem =~ /{$/) {
+					$endsToIgnore++;
+				}
+				if ($subitem =~ /^}$/ and $endsToIgnore == 0) {
+					last;
+				} elsif ($subitem =~ /^}$/) {
+					$endsToIgnore--;
+				}
+				push @sublist, $subitem;
+			}
+			my @subcommands = &PerlToList(@sublist);
+			push @list, ["$ifwhile", {"statement"=>$statement, "commands"=>\@subcommands}];
+		} else { # unknown (or comment)
+			if ($item =~ /^#!/) {
 
-			} elsif ($perl[$i] =~ /^#/) {
-				$list[$i] = $perl[$i];
+			} elsif ($item =~ /^#/) {
+				push @list, $item;
 			} else {
-				$list[$i] = "# " . $perl[$i];
+				push @list, "# " . $item;
 			}
 		}
 	}
@@ -47,32 +58,46 @@ sub ListToPython {
 	# converts a list-based language-independant
 	# recursive data structure into a python file,
 	# as an array of lines
+	my $noHeader = pop @_;
 	my (@list) = @_;
 	my @python = ();
 	my %imports;
 
-	foreach $i (0..$#list) {
-		my @statement = @{$list[$i]} if defined $list[$i];
-		if ((defined $statement[0]) and ($statement[0] eq "print")) {
+	while (@list) {
+		my $item = shift @list;
+		my @statement = @{$item} if defined $item;
+
+		if (defined $statement[0]) {
 			my %args = %{$statement[1]};
-			if ($args{"newline"}) {
-				push @python, ("print \"" . $args{"string"} ."\"");
-			} else {
-				$imports{"sys"}++;
-				push @python, ("sys.stdout.write(\"" . $args{"string"} . "\")")
+
+			if ($statement[0] eq "print") {
+				if ($args{"newline"}) {
+					push @python, ("print \"" . $args{"string"} ."\"");
+				} else {
+					$imports{"sys"}++;
+					push @python, ("sys.stdout.write(\"" . $args{"string"} . "\")")
+				}
+			} elsif ($statement[0] =~ /(if|while)/) {
+				push @python, ("$1 " . $args{"statement"} . ":");
+				foreach $line (&ListToPython(@{$args{"commands"}}, 1)) {
+					push @python, ("    " . $line);
+
+				}
 			}
 		} else {
-			push @python, $list[$i];
+			push @python, $item;
 		}
 	}
 
-	unshift @python, "";
+	if (!$noHeader) {
+		unshift @python, "";
 
-	foreach $import (keys %imports) {
-		unshift @python, "import $import";
+		foreach $import (keys %imports) {
+			unshift @python, "import $import";
+		}
+
+		unshift @python, "#!/usr/bin/python2.7 -u";
 	}
-
-	unshift @python, "#!/usr/bin/python2.7 -u";
 
 	return @python;
 }
@@ -85,13 +110,19 @@ $string = <>;
 
 # makes sure each statement and comment gets its own line
 $string =~ s/#/\n#/g;
-$string =~ s/;/;\n/g;
+$string =~ s/;/\n/g;
 $string =~ s/{/{\n/g;
 $string =~ s/}/\n}\n/g;
 $string =~ s/(\s*\n+\s*)+/\n/g;
 
-@perl = split "\n", $string;
+@perlTemp = split "\n", $string;
 
-print join("\n", &ListToPython(&PerlToList(@perl)));
+foreach (@perlTemp) {
+	if ((defined $_) and !($_ =~ /^$/)) {
+		push @perl, $_;
+	}
+}
+
+print join("\n", &ListToPython(&PerlToList(@perl), 0));
 
 print "\n";

@@ -13,6 +13,11 @@ while ($i < 10) {
 	$i++; $i--; $i++;
 }
 
+if ($i > 2) {
+	print "sup\n";
+	print "sup";
+}
+
 # $i++ and i-- should not change in comments
 $a = "or in strings! $i-- i++"; # or inline comments! $hello $i++ i--
 $i--;
