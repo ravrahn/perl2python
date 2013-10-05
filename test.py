@@ -9,16 +9,16 @@ print "hello"
 while $i < 10:
     if $i % 2 == 0:
         sys.stdout.write("hi")
-    # $i++
-    # $i--
-    # $i++
+    i = i + 1
+    i = i - 1
+    i = i + 1
 if $i > 2:
     print "sup"
     sys.stdout.write("sup")
 # $i++ and i-- should not change in comments
 # $a = "or in strings! $i-- i++"
 # or inline comments! $hello $i++ i--
-# $i--
+i = i - 1
 # print $i
 # @array = ()
 # foreach $line (@array) {
