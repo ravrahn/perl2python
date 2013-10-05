@@ -3,7 +3,8 @@ import sys
 
 # $hello = "greetings!"
 print hello
-sys.stdout.write("hello!")
+# The following line is a BUG
+sys.stdout.write("hello +  +  + ")
 print "hello"
 # $i = 0
 while $i < 10:

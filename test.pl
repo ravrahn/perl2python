@@ -4,7 +4,8 @@ $hello = "greetings!";
 
 print "$hello\n";
 
-print "hello!";
+# The following line is a BUG
+print "hello...";
 print "hello\n";
 
 $i = 0;

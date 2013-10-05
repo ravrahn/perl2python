@@ -4,23 +4,22 @@
 
 # Basic Types:
 	# string - a string
-	# int - an integer
-	# bool - a boolean
 
 # Simple Types:
 	# oper - A string containing an arithemetic, logical, comparison, or bitwise operator
 	# expr - Array containing n instances of str, var, oper
 	# str - Array containing n instances of string, var
 
-# Strings and expressions are dynamic in length
+# Str and expr are dynamic in length
 # as such they are stored as n-length arrays
 # with their first element being "str" or "expr"
 # operators are stored as, for example: ["oper", ">"]
 
 # Complex Types
 	# var - string type, string name
-	# range - int start, int end
-	# assign - var left, expr right, bool local
+	# comment - string text
+	# range - string start, string end
+	# assign - var left, expr right
 	# print - str string
 	# if - expr statement, List commands
 	# while - expr statement, List commands
@@ -63,7 +62,7 @@ sub StringToStr {
 	# into an array of vars and strings
 
 	my ($string) = @_;
-	my $str = [];
+	my $str = ["str"];
 
 	my $newString = $string;
 
@@ -174,6 +173,9 @@ sub ListToPython {
 				my @str;
 
 				foreach my $str (@{$args{"string"}}) {
+					if ($str =~ /^str$/) {
+						next;
+					}
 					if ($str =~ /^ARRAY/) {
 						%var = %{@{$str}[1]};
 						$str = $var{"name"};
