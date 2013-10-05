@@ -2,7 +2,7 @@
 import sys
 
 # $hello = "greetings!"
-print "$hello"
+print hello
 sys.stdout.write("hello!")
 print "hello"
 # $i = 0
@@ -19,7 +19,7 @@ if $i > 2:
 # $a = "or in strings! $i-- i++"
 # or inline comments! $hello $i++ i--
 i = i - 1
-# print $i
+sys.stdout.write(i)
 # @array = ()
 # foreach $line (@array) {
 # stuff
