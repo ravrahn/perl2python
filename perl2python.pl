@@ -1,9 +1,42 @@
 #!/usr/bin/perl -w
 
+#The List data structure:
+
+# Basic Types:
+	# string - a string
+	# int - an integer
+	# bool - a boolean
+
+# Simple Types:
+	# oper - A string containing an arithemetic, logical, comparison, or bitwise operator
+	# expr - Array containing n instances of str, var, oper
+	# str - Array containing n instances of string, var
+
+# Strings and expressions are dynamic in length
+# as such they are stored as n-length arrays
+# with their first element being "str" or "expr"
+# operators are stored as, for example: ["oper", ">"]
+
+# Complex Types
+	# var - string type, string name
+	# range - int start, int end
+	# assign - var left, expr right, bool local
+	# print - str string, bool newline
+	# if - expr statement, List commands
+	# while - expr statement, List commands
+	# for - i, set, List commands
+
+# Each complex type is stored in this format:
+# [name, {property=>value, property=>value}]
+# A value can be another of these 'objects', or even an entire List
+
+
+
 sub PerlToList {
 	# converts a perl file, as an array of lines
 	# into a list-based language-independant
 	# recursive data structure.
+
 	my (@perl) = @_;
 	my @list;
 
@@ -40,6 +73,10 @@ sub PerlToList {
 			}
 			my @subcommands = &PerlToList(@sublist);
 			push @list, ["$ifwhile", {"statement"=>$statement, "commands"=>\@subcommands}];
+		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\+\+/) { # $i++
+			push @list, ["assign", {"left"=>$1, "right"=>"$1 + 1"}];
+		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\-\-/) { # $i--
+			push @list, ["assign", {"left"=>$1, "right"=>"$1 - 1"}];
 		} else { # unknown (or comment)
 			if ($item =~ /^#!/) {
 
@@ -83,6 +120,10 @@ sub ListToPython {
 					push @python, ("    " . $line);
 
 				}
+			} elsif ($statement[0] eq "assign") {
+				my $left = $args{"left"};
+				my $right = $args{"right"};
+				push @python, ("$left = $right");
 			}
 		} else {
 			push @python, $item;
