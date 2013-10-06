@@ -1,6 +1,5 @@
 #!/usr/bin/perl -w
 
-
 sub StringToStr {
 	# converts a perl string, like "hello $world\n".$hello." world\n"
 	# into an array of vars and strings
@@ -8,32 +7,49 @@ sub StringToStr {
 	my ($string) = @_;
 	my $str = [];
 
-	my $newString = $string;
+	my @string = ();
 
-	# remove variables from inside strings
-	$newString =~ s/"([^"^\.]*)(\$[a-zA-Z][a-zA-Z0-9_]*)([^"^\.]*)"/"$1".$2."$3"/g;
+	my @newString = split //, $string;
 
-	# replace "hello "."world" with "hello world"
-	$newString =~ s/"\s*\.\s*"//g;
+	my @currentVar = ();
+	my $inString = "";
+	my $prevChar = "";
+	my $char = "";
 
-	# because there are no legal variable names inside strings,
-	# and we need to split on dots,
-	# we can replace dots inside strings with "$dot",
-	# because it is guaranteed not to be in the strings anywhere else
-	$newString =~ s/("[^"^\.]*?)\.([^"^\.]*")/$1\$dot$2/g;
-
-	# now the string is in perl concat format
-	# "string" . $var . "string" . $var, etc.
-	# and dots inside strings have been replaced with $dot
-
-	@strings = split(/\./, $newString);
-
-	foreach my $item (@strings) {
-		if ($item =~ /^\$[a-zA-Z][a-zA-Z0-9_]*$/) {
+	while (@newString) {
+		$char = shift @newString;
+		if ($inString eq "") {
+			if ($char =~ /("|')/ && !($prevChar eq "\\")) {
+				$inString = $1;
+				push @currentVar, $char;
+			} elsif ($char eq ".") {
+				push @string, (join "", @currentVar);
+				@currentVar = ();
+			} else {
+				push @currentVar, $char;
+			}
 		} else {
-			$item =~ s/\$dot/./g;
+			if ($char eq $inString) {
+				$inString = "";
+			}
+			push @currentVar, $char;
 		}
-		push @{$str}, $item;
+		$prevChar = $char;
+	}
+	push @string, (join "", @currentVar);
+
+	foreach (@string) {
+		if ($_ =~ /^("|')/) {
+			my $tempString = $_;
+			$tempString =~ s/(\$[a-zA-Z][a-zA-Z0-9_]*)/".$1."/g;
+			if ($tempString eq $_) {
+				push @{$str}, $_;
+			} else {
+				push @{$str}, @{&StringToStr($tempString)};
+			}
+		} else {
+			push @{$str}, $_;
+		}
 	}
 
 	return $str;

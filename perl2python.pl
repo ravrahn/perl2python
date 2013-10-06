@@ -19,7 +19,7 @@
 	# var - string type, string name
 	# comment - string text
 	# range - string start, string end
-	# assign - var left, expr right
+	# assign - var left, expr|str right
 	# print - str string
 	# if - expr statement, List commands
 	# while - expr statement, List commands
@@ -64,33 +64,48 @@ sub StringToStr {
 	my ($string) = @_;
 	my $str = ["str"];
 
-	my $newString = $string;
+	my @string = ();
 
-	# remove variables from inside strings
-	$newString =~ s/"([^"^\.]*)(\$[a-zA-Z][a-zA-Z0-9_]*)([^"^\.]*)"/"$1".$2."$3"/g;
+	my @newString = split //, $string;
 
-	# replace "hello "."world" with "hello world"
-	$newString =~ s/"\s*\.\s*"//g;
+	my @currentVar = ();
+	my $inString = "";
+	my $prevChar = "";
+	my $char = "";
 
-	# because there are no legal variable names inside strings,
-	# (they've been removed already)
-	# and we need to split on dots,
-	# we can replace dots inside strings with "$dot",
-	# because it is guaranteed not to be in the strings anywhere else
-	$newString =~ s/("[^"^\.]*?)\.([^"^\.]*")/$1\$dot$2/g;
-
-	# now the string is in perl concat format
-	# "string" . $var . "string" . $var, etc.
-	# and dots inside strings have been replaced with $dot
-
-	@strings = split(/\./, $newString);
-
-	foreach my $item (@strings) {
-		if ($item =~ /^\$[a-zA-Z][a-zA-Z0-9_]*$/) {
-			push @{$str}, &StringToVar($item);
+	while (@newString) {
+		$char = shift @newString;
+		if ($inString eq "") {
+			if ($char =~ /("|')/ && !($prevChar eq "\\")) {
+				$inString = $1;
+				push @currentVar, $char;
+			} elsif ($char eq ".") {
+				push @string, (join "", @currentVar);
+				@currentVar = ();
+			} else {
+				push @currentVar, $char;
+			}
 		} else {
-			$item =~ s/\$dot/./g;
-			push @{$str}, $item;
+			if ($char eq $inString) {
+				$inString = "";
+			}
+			push @currentVar, $char;
+		}
+		$prevChar = $char;
+	}
+	push @string, (join "", @currentVar);
+
+	foreach (@string) {
+		if ($_ =~ /^("|')/) {
+			my $tempString = $_;
+			$tempString =~ s/(\$[a-zA-Z][a-zA-Z0-9_]*)/".$1."/g;
+			if ($tempString eq $_) {
+				push @{$str}, $_;
+			} else {
+				push @{$str}, @{&StringToStr($tempString)};
+			}
+		} else {
+			push @{$str}, &StringToVar($_);
 		}
 	}
 
@@ -133,15 +148,24 @@ sub PerlToList {
 			push @list, ["$ifwhile", {"statement"=>$statement, "commands"=>\@subcommands}];
 		
 		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\+\+/) { # $i++
-			push @list, ["assign", {"left"=>$1, "right"=>"$1 + 1"}];
+			push @list, ["assign", {"left"=>&StringToVar("$1"), "right"=>"$1 + 1"}];
 		
 		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\-\-/) { # $i--
-			push @list, ["assign", {"left"=>$1, "right"=>"$1 - 1"}];
+			push @list, ["assign", {"left"=>&StringToVar("\$$1"), "right"=>"$1 - 1"}];
 		
-		} else { # unknown (or comment)
+		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*=(.*)/) {
+			my $left = $1;
+			my $right = $2;
+			if ($right =~ /"|'/) { # right side is a string
+				push @list, ["assign", {"left"=>&StringToVar("\$$left"), "right"=>&StringToStr($right)}];
+			}
+
+		}else { # unknown (or comment)
 			if ($item =~ /^#!/) {
 				# completely ignore hashbangs
-			} elsif ($item =~ /^#/) {
+			} elsif ($item =~ /^$/) {
+				push @list, $item;
+			}elsif ($item =~ /^#/) {
 				push @list, $item;
 			} else {
 				push @list, "# " . $item;
@@ -209,7 +233,17 @@ sub ListToPython {
 				}
 			} elsif ($statement[0] eq "assign") {
 				my $left = $args{"left"};
+				my @leftArray = @{$left};
+				if (@leftArray and ($leftArray[0] eq "var")) {
+					my %leftArgs = %{$leftArray[1]};
+					$left = $leftArgs{"name"};
+				}
 				my $right = $args{"right"};
+				my @rightArray = @{$right};
+				if (@rightArray and ($rightArray[0] eq "str")) {
+					shift @{$right};
+					$right = join " + ", @{$right};
+				}
 				push @python, ("$left = $right");
 			}
 		} else {
@@ -218,9 +252,12 @@ sub ListToPython {
 	}
 
 	if (!$noHeader) {
-		unshift @python, "";
+		if (!($python[0] =~ /^$/)) {
 
-		foreach $import (keys %imports) {
+		unshift @python, "";
+		}
+
+		foreach my $import (keys %imports) {
 			unshift @python, "import $import";
 		}
 
@@ -236,6 +273,8 @@ undef $/;
 
 $string = <>;
 
+$string =~ s/\n\n/\nBLANKLINE\n/g;
+
 # makes sure each statement and comment gets its own line
 $string =~ s/#/\n#/g;
 $string =~ s/;/\n/g;
@@ -249,6 +288,10 @@ foreach (@perlTemp) {
 	if ((defined $_) and !($_ =~ /^$/)) {
 		push @perl, $_;
 	}
+}
+
+foreach (@perl) {
+	$_ =~ s/^BLANKLINE$//g;
 }
 
 print join("\n", &ListToPython(&PerlToList(@perl), 0));

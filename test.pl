@@ -1,10 +1,13 @@
 #!/usr/bin/perl -w
 
-$hello = "greetings!";
+$hello = "greetings";
+
+$world = "world";
 
 print "$hello\n";
 
-# The following line is a BUG
+print "hello $world\n".$hello." world\n";
+
 print "hello...";
 print "hello\n";
 
