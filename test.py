@@ -5,21 +5,22 @@ hello =  "greetings"
 
 world =  "world"
 
-print hello
+print str(hello)
 
-print "hello " + world + "\n" + hello + " world"
+print "hello " + str(world) + "\n" + str(hello) + " world"
 
 sys.stdout.write("hello...")
 print "hello"
 
-while $i < 10:
-    if $i % 2 == 0:
+i =  0
+while  i < 10:
+    if  i % 2 == 0  and  i > 4:
         sys.stdout.write("hi")
     i = i + 1
     i = i - 1
     i = i + 1
 
-if $i > 2:
+if  i > 2:
     print "sup"
     sys.stdout.write("sup")
 
@@ -28,7 +29,7 @@ a =  "or in strings! $i-- i++"
 # or inline comments! $hello $i++ i--
 i = i - 1
 
-sys.stdout.write(i)
+sys.stdout.write(str(i))
 
 # @array = ()
 

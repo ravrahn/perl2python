@@ -4,9 +4,9 @@
 
 # Basic Types:
 	# string - a string
+	# oper - A string containing an arithemetic, logical, comparison, or bitwise operator
 
 # Simple Types:
-	# oper - A string containing an arithemetic, logical, comparison, or bitwise operator
 	# expr - Array containing n instances of str, var, oper
 	# str - Array containing n instances of string, var
 
@@ -112,6 +112,43 @@ sub StringToStr {
 	return $str;
 }
 
+sub StringToExpr {
+	# converts a string containing a perl expression
+	# like "1 + $i" or "1 == $i"
+	# into an array of ints, opers, and vars.
+
+	my ($string) = @_;
+	my $expr = ["expr"];
+
+	my @stuff = split /\+|\-|\*|\/|%|\*\*|\|\||&&|!| and | or |not |<|>|<=|<>|!=|==|eq|lt|gt/, $string;
+	my @opers = ( $string =~ /\+|\-|\*|\/|%|\*\*|\|\||&&|!| and | or |not |<|>|<=|<>|!=|==/g );
+
+	
+
+	for (my $i=0; $i <= $#stuff; $i++) {
+		$stuff[$i] =~ s/^\s*//g;
+		$stuff[$i] =~ s/\s*$//g;
+		if ($stuff[$i] =~ /^\s*(\$|\@|\%)/) {
+			$stuff[$i] = &StringToVar($stuff[$i]);
+		} elsif ($stuff[$i] =~ /^("|')/) {
+			$stuff[$i] = &StringToStr($stuff[$i]);
+		}
+		push @{$expr}, $stuff[$i];
+
+		if (defined $opers[$i]) {
+			$opers[$i] =~ s/&&/ and /g;
+			$opers[$i] =~ s/\|\|/ or /g;
+			$opers[$i] =~ s/!/not /g;
+			$opers[$i] =~ s/lt/</g;
+			$opers[$i] =~ s/gt/>/g;
+			$opers[$i] =~ s/eq/==/g;
+			push @{$expr}, $opers[$i];
+		}
+	}
+
+	return $expr;
+}
+
 
 sub PerlToList {
 	# converts a perl file, as an array of lines
@@ -145,7 +182,7 @@ sub PerlToList {
 				push @sublist, $subitem;
 			}
 			my @subcommands = &PerlToList(@sublist);
-			push @list, ["$ifwhile", {"statement"=>$statement, "commands"=>\@subcommands}];
+			push @list, ["$ifwhile", {"statement"=>&StringToExpr($statement), "commands"=>\@subcommands}];
 		
 		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\+\+/) { # $i++
 			push @list, ["assign", {"left"=>&StringToVar("$1"), "right"=>"$1 + 1"}];
@@ -158,6 +195,8 @@ sub PerlToList {
 			my $right = $2;
 			if ($right =~ /"|'/) { # right side is a string
 				push @list, ["assign", {"left"=>&StringToVar("\$$left"), "right"=>&StringToStr($right)}];
+			} else {
+				push @list, ["assign", {"left"=>&StringToVar("\$$left"), "right"=>&StringToExpr($right)}];
 			}
 
 		}else { # unknown (or comment)
@@ -174,6 +213,69 @@ sub PerlToList {
 	}
 
 	return @list;
+}
+
+sub ExprToPython {
+
+	my (@expr) = @_;
+	my $python = "";
+
+	if (!($expr[0] eq "expr")) {
+		return @expr;
+	}
+
+	shift @expr;
+
+	foreach (@expr) {
+		if ($_ =~ /^ARRAY/) {
+			if (@{$_}[0] eq "str") {
+				$python = $python." (".&StrToPython(@{$_}).")";
+			} elsif (@{$_}[0] eq "var") {
+				$python = $python." ".&VarToPython(@{$_});
+			}
+		} else {
+			$python = $python." ".$_;
+		}
+	}
+
+	return $python;
+}
+
+sub VarToPython {
+	my (@var) = @_;
+	my $python = "";
+
+	if (!($var[0] eq "var")) {
+		return @var;
+	}
+
+	my %args = %{$var[1]};
+
+	return $args{"name"};
+}
+
+sub StrToPython {
+
+	my (@str) = @_;
+
+	my @string = ();
+
+
+	foreach my $str (@str) {
+		if ($str =~ /^str$/) {
+			next;
+		}
+		if ($str =~ /^ARRAY/) {
+			my %var = %{@{$str}[1]};
+			$str = "str(".$var{"name"}.")";
+
+		}
+		push @string, $str;
+	}
+
+	my $python = join " + ", @string;
+
+	return $python;
 }
 
 sub ListToPython {
@@ -196,18 +298,7 @@ sub ListToPython {
 				my $newline;
 				my @str;
 
-				foreach my $str (@{$args{"string"}}) {
-					if ($str =~ /^str$/) {
-						next;
-					}
-					if ($str =~ /^ARRAY/) {
-						%var = %{@{$str}[1]};
-						$str = $var{"name"};
-					}
-					push @str, $str;
-				}
-
-				my $string = join " + ", @str;
+				my $string = &StrToPython(@{$args{"string"}});
 
 				if ($string =~ /\\n"\s*$/) {
 					$newline = 1;
@@ -226,11 +317,16 @@ sub ListToPython {
 					push @python, ("sys.stdout.write(" . $string . ")");
 				}
 			} elsif ($statement[0] =~ /(if|while)/) {
-				push @python, ("$1 " . $args{"statement"} . ":");
-				foreach $line (&ListToPython(@{$args{"commands"}}, 1)) {
-					push @python, ("    " . $line);
+				my @statementArg = @{$args{"statement"}};
+				if ($statementArg[0] eq "expr") {
+					push @python, ("$1 " . &ExprToPython(@statementArg) . ":");
+					foreach $line (&ListToPython(@{$args{"commands"}}, 1)) {
+						push @python, ("    " . $line);
 
+					}
 				}
+
+				
 			} elsif ($statement[0] eq "assign") {
 				my $left = $args{"left"};
 				my @leftArray = @{$left};
@@ -241,8 +337,9 @@ sub ListToPython {
 				my $right = $args{"right"};
 				my @rightArray = @{$right};
 				if (@rightArray and ($rightArray[0] eq "str")) {
-					shift @{$right};
-					$right = join " + ", @{$right};
+					$right = &StrToPython(@{$right});
+				} elsif (@rightArray and ($rightArray[0] eq "expr")) {
+					$right = &ExprToPython(@{$right});
 				}
 				push @python, ("$left = $right");
 			}

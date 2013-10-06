@@ -9,3 +9,4 @@ Date;Start;Stop;Activity
 05/10;2:30;3:30;Functions "StringToVar" and "StringToStr" completed implemented in the print function.
 06/10;16:30;18:30;Changed approach of StringToStr to fix bugs.
 06/10;23:15;23:30;Now maintains newlines.
+07/10;00:00;01:30;Wrapped variables being printed in a str() to avoid errors. Reworked a lot of &ListToPython, added helper functions for translation.

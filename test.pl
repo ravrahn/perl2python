@@ -13,7 +13,7 @@ print "hello\n";
 
 $i = 0;
 while ($i < 10) {
-	if ($i % 2 == 0) {print "hi";}
+	if ($i % 2 == 0 and $i > 4) {print "hi";}
 	$i++; $i--; $i++;
 }
 
