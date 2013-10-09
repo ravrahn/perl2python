@@ -2,6 +2,7 @@
 
 * simple print statements (with explicit new lines)
 * strings
+
 [examples of subset 0](http://www.cse.unsw.edu.au/~cs2041/13s2/assignments/perl2python/examples/0)
 
 ###Subset 1
@@ -9,6 +10,7 @@
 * variables
 * numeric constants
 * arithmetic operators: + - * / % **
+
 [examples of subset 1](http://www.cse.unsw.edu.au/~cs2041/13s2/assignments/perl2python/examples/1)
 
 ###Subset 2
