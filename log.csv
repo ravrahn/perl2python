@@ -10,3 +10,7 @@ Date;Start;Stop;Activity
 06/10;16:30;18:30;Changed approach of StringToStr to fix bugs.
 06/10;23:15;23:30;Now maintains newlines.
 07/10;00:00;01:30;Wrapped variables being printed in a str() to avoid errors. Reworked a lot of &ListToPython, added helper functions for translation.
+07/10;11:00;11:10;Added last and next translation. Added more to test.pl
+09/10;7:30;9:00;Rewrote StringToExpr, now WORKS PROPERLY WOW
+09/10;9:30;11:00;Fixing various errors. Writing tests.
+09/10;11:00;12:00;Cutting it close. Fixing last minute bugs and writing demos and tests.

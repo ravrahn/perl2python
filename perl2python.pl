@@ -1,5 +1,8 @@
 #!/usr/bin/perl -w
 
+use strict;
+use warnings;
+
 #The List data structure:
 
 # Basic Types:
@@ -17,13 +20,12 @@
 
 # Complex Types
 	# var - string type, string name
-	# comment - string text
 	# range - string start, string end
 	# assign - var left, expr|str right
 	# print - str string
 	# if - expr statement, List commands
 	# while - expr statement, List commands
-	# for - i, set, List commands
+	# for - var, set, List commands
 
 # Each complex type is stored in this format:
 # [name, {property=>value, property=>value}]
@@ -65,6 +67,8 @@ sub StringToStr {
 	my $str = ["str"];
 
 	my @string = ();
+
+	$string =~ s/^\s*//;
 
 	my @newString = split //, $string;
 
@@ -112,6 +116,20 @@ sub StringToStr {
 	return $str;
 }
 
+sub operSplit {
+	# so I didn't need to have
+	# these lines
+	# 10 times over and over
+	# in the multi-char bit
+	my ($expr, $char, $chars) = @_;
+	my @chars = @{$chars};
+
+	my $str = join "", @chars;
+	$str =~ s/^\s*(.*)\s*$/$1/;
+	push @{$expr}, $str;
+	push @{$expr}, $char;
+}
+
 sub StringToExpr {
 	# converts a string containing a perl expression
 	# like "1 + $i" or "1 == $i"
@@ -120,35 +138,194 @@ sub StringToExpr {
 	my ($string) = @_;
 	my $expr = ["expr"];
 
-	my @stuff = split /\+|\-|\*|\/|%|\*\*|\|\||&&|!| and | or |not |<|>|<=|<>|!=|==|eq|lt|gt/, $string;
-	my @opers = ( $string =~ /\+|\-|\*|\/|%|\*\*|\|\||&&|!| and | or |not |<|>|<=|<>|!=|==/g );
-
+	# /and|or|not|<=|>=|<>|!=|==|eq|<<|>>|&|~|\||\^|\+|\-|\*\*|\*|\/|%|\|\||&&|!|<|>/, $string;
 	
+	my @string = split //, $string;
 
-	for (my $i=0; $i <= $#stuff; $i++) {
-		$stuff[$i] =~ s/^\s*//g;
-		$stuff[$i] =~ s/\s*$//g;
-		if ($stuff[$i] =~ /^\s*(\$|\@|\%)/) {
-			$stuff[$i] = &StringToVar($stuff[$i]);
-		} elsif ($stuff[$i] =~ /^("|')/) {
-			$stuff[$i] = &StringToStr($stuff[$i]);
-		}
-		push @{$expr}, $stuff[$i];
-
-		if (defined $opers[$i]) {
-			$opers[$i] =~ s/&&/ and /g;
-			$opers[$i] =~ s/\|\|/ or /g;
-			$opers[$i] =~ s/!/not /g;
-			$opers[$i] =~ s/lt/</g;
-			$opers[$i] =~ s/gt/>/g;
-			$opers[$i] =~ s/eq/==/g;
-			push @{$expr}, $opers[$i];
+	my @chars = ();
+	while (@string) { # go through char-by-char
+		my $char = shift @string;
+		if ($char =~ /\+|\^|\-|~|%|\.|\//) { # operators that cannot be the start of a multi-char operator
+			&operSplit($expr, $char, \@chars);
+			@chars = ();
+		# operators that can be the start of a multi-char operator
+		} elsif ($char =~ /</) {
+			if ($string[0] =~ /(>|<|=)/) {
+				shift @string;
+				&operSplit($expr, $char.$1, \@chars);
+				@chars = ();
+			} else {
+				&operSplit($expr, $char, \@chars);
+				@chars = ();
+			}
+		} elsif ($char =~ />/) {
+			if ($string[0] =~ /(=|>)/) {
+				shift @string;
+				&operSplit($expr, $char.$1, \@chars);
+				@chars = ();
+			} else {
+				&operSplit($expr, $char, \@chars);
+				@chars = ();
+			}
+		} elsif ($char =~ /=/) {
+			if ($string[0] =~ /=/) {
+				shift @string;
+				&operSplit($expr, $char."=", \@chars);
+				@chars = ();
+			} else {
+				# = is not a normal operator so it's just pushed on
+				# if it's not ==
+				push @chars, $char;
+			}
+		} elsif ($char =~ /!/) {
+			if ($string[0] =~ /=/) {
+				shift @string;
+				&operSplit($expr, $char."=", \@chars);
+				@chars = ();
+			} else {
+				&operSplit($expr, $char, \@chars);
+				@chars = ();
+			}
+		} elsif ($char =~ /&/) {
+			if ($string[0] =~ /&/) {
+				shift @string;
+				&operSplit($expr, $char."&", \@chars);
+				@chars = ();
+			} else {
+				&operSplit($expr, $char, \@chars);
+				@chars = ();
+			}
+		} elsif ($char =~ /\*/) {
+			if ($string[0] =~ /\*/) {
+				shift @string;
+				&operSplit($expr, $char."*", \@chars);
+				@chars = ();
+			} else {
+				&operSplit($expr, $char, \@chars);
+				@chars = ();
+			}
+		} elsif ($char =~ /\|/) {
+			if ($string[0] =~ /\|/) {
+				shift @string;
+				&operSplit($expr, $char."|", \@chars);
+				@chars = ();
+			} else {
+				&operSplit($expr, $char, \@chars);
+				@chars = ();
+			}
+		} elsif ($char =~ /a/) {
+			if ($string[0] =~ /n/ and $string[1] =~ /d/) {
+				shift @string;
+				shift @string;
+				&operSplit($expr, $char."nd", \@chars);
+				@chars = ();
+			} else {
+				push @chars, $char;
+			}
+		} elsif ($char =~ /n/) {
+			if ($string[0] =~ /o/ and $string[1] =~ /t/) {
+				shift @string;
+				shift @string;
+				&operSplit($expr, $char."ot", \@chars);
+				@chars = ();
+			} else {
+				push @chars, $char;
+			}
+		} elsif ($char =~ /o/) {
+			if ($string[0] =~ /r/) {
+				shift @string;
+				&operSplit($expr, $char."r", \@chars);
+				@chars = ();
+			} else {
+				push @chars, $char;
+			}
+		} elsif ($char =~ /e/) {
+			if ($string[0] =~ /q/) {
+				shift @string;
+				&operSplit($expr, $char."q", \@chars);
+				@chars = ();
+			} else {
+				push @chars, $char;
+			}
+		} elsif ($char =~ /(\$|@|%)/) {
+			if ((defined $string[0]) and $string[0] =~ /[a-zA-Z]/) {
+				# grab the rest of the variable
+				# turn it into a var
+				# and add that to the expr array
+				my $varend = 0;
+				my $i = 0;
+				while ($i <= $#string) {
+					if ($string[$i] =~ /[a-zA-Z0-9_]/) {
+						$varend = $i+1;
+					} else {
+						last;
+					}
+					$i++;
+				}
+				my @arr = ($char);
+				foreach my $i (0..$varend-1) {
+					push @arr, shift @string;
+				}
+				push @{$expr}, &StringToVar((join("", @arr)));
+			} else {
+				# it's not of interest
+				push @chars, $char;
+			}
+		} elsif ($char =~ /\(/) {
+			# grab everything inside the brackets
+			# and call &StringToExpr on it
+			# and add that to the expr array
+			my $close = 0;
+			my $opens = 1;
+			my $i = 0;
+			while ($i <= $#string and $opens != 0) {
+				if ($string[$i] =~ /\)/) {
+					$close = $i;
+					$opens--;
+				} elsif ($string[$i] =~ /\(/) {
+					$opens++;
+				}
+				$i++;
+			}
+			my @arr = ();
+			foreach my $i (0..$close-1) {
+				push @arr, shift @string;
+			}
+			shift @string;
+			push @{$expr}, &StringToExpr((join "", @arr));
+		} elsif ($char =~ /"|'/) {
+			# grab the whole string
+			# and calls &StringToStr on it
+			# and add that to the expr array
+			my $strend = 0;
+			my $i = 0;
+			while ($i <= $#string) {
+				if ($string[$i] =~ /\\/) { # this line obliterates syntax highlighting due to a sublime text bug, I think
+					$i++;
+				} elsif ($string[$i] =~ /$char/) {
+					$strend = $i;
+				}
+				$i++;
+			}
+			my @arr = ();
+			foreach my $i (0..$strend-1) {
+				push @arr, shift @string;
+			}
+			shift @string;
+			push @{$expr}, &StringToStr("\"".(join "", @arr)."\"");
+		} else {
+			# just add it to the array
+			push @chars, $char;
 		}
 	}
 
+	my $str = join "", @chars;
+	$str =~ s/^\s*(.*)\s*$/$1/;
+
+	push @{$expr}, $str;
+
 	return $expr;
 }
-
 
 sub PerlToList {
 	# converts a perl file, as an array of lines
@@ -164,7 +341,7 @@ sub PerlToList {
 			my $str = $1;
 			push @list, ["print", {"string"=>&StringToStr($str)}];
 
-		} elsif ($item =~ /^(if|while)\s*\((.*?)\)\s*{/) {
+		} elsif ($item =~ /^(if|while|elsif)\s*\((.*?)\)\s*{/) {
 			my $ifwhile = $1;
 			my $statement = $2;
 			my @sublist = ();
@@ -184,19 +361,46 @@ sub PerlToList {
 			my @subcommands = &PerlToList(@sublist);
 			push @list, ["$ifwhile", {"statement"=>&StringToExpr($statement), "commands"=>\@subcommands}];
 		
+		} elsif ($item =~ /^(for|foreach)\s*(\$[a-zA-Z][a-zA-Z0-9_]*)\s*\((.*)\)/) {
+			my $var = &StringToVar($2);
+			my $set = $3;
+			my @sublist = ();
+			my $endsToIgnore = 0;
+			while (1) {
+				my $subitem = shift @perl;
+				if ($subitem =~ /{$/) {
+					$endsToIgnore++;
+				}
+				if ($subitem =~ /^}$/ and $endsToIgnore == 0) {
+					last;
+				} elsif ($subitem =~ /^}$/) {
+					$endsToIgnore--;
+				}
+				push @sublist, $subitem;
+			}
+
+			if ($set =~ /(.*)\.\.(.*)/) {
+				$set = ["range", {"left"=>$1, "right"=>$2}];
+			} else {
+				$set = &StringToVar($set);
+			}
+
+			my @subcommands = &PerlToList(@sublist);
+			push @list, ["for", {"var"=>$var, "set"=>$set, "commands"=>\@subcommands}];
+
 		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\+\+/) { # $i++
 			push @list, ["assign", {"left"=>&StringToVar("$1"), "right"=>"$1 + 1"}];
 		
 		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*\-\-/) { # $i--
 			push @list, ["assign", {"left"=>&StringToVar("\$$1"), "right"=>"$1 - 1"}];
 		
-		} elsif ($item =~ /^\$([a-zA-Z][a-zA-Z0-9_]*)\s*=(.*)/) {
+		} elsif ($item =~ /^(\$[a-zA-Z][a-zA-Z0-9_]*)\s*=(.*)/) {
 			my $left = $1;
 			my $right = $2;
 			if ($right =~ /"|'/) { # right side is a string
-				push @list, ["assign", {"left"=>&StringToVar("\$$left"), "right"=>&StringToStr($right)}];
-			} else {
-				push @list, ["assign", {"left"=>&StringToVar("\$$left"), "right"=>&StringToExpr($right)}];
+				push @list, ["assign", {"left"=>&StringToVar("$left"), "right"=>&StringToStr($right)}];
+			} else { # right side in an expr
+				push @list, ["assign", {"left"=>&StringToVar("$left"), "right"=>&StringToExpr($right)}];
 			}
 
 		}else { # unknown (or comment)
@@ -204,8 +408,12 @@ sub PerlToList {
 				# completely ignore hashbangs
 			} elsif ($item =~ /^$/) {
 				push @list, $item;
-			}elsif ($item =~ /^#/) {
+			} elsif ($item =~ /^#/) {
 				push @list, $item;
+			} elsif ($item =~ /^last$/) {
+				push @list, "break";
+			} elsif ($item =~ /^next$/) {
+				push @list, "continue";
 			} else {
 				push @list, "# " . $item;
 			}
@@ -232,9 +440,19 @@ sub ExprToPython {
 				$python = $python." (".&StrToPython(@{$_}).")";
 			} elsif (@{$_}[0] eq "var") {
 				$python = $python." ".&VarToPython(@{$_});
+			} elsif (@{$_}[0] eq "expr") {
+				$python= $python."(".&ExprToPython(@{$_}).")";
 			}
 		} else {
-			$python = $python." ".$_;
+			if ($_ =~ /^\s*!\s*$/) {
+				$python = $python." not";
+			} elsif ($_ =~ /^\s*\|\|\s*$/) {
+				$python = $python." or";
+			} elsif ($_ =~ /^\s*&&\s*$/) {
+				$python = $python." and";
+			} else {
+				$python = $python." ".$_;
+			}
 		}
 	}
 
@@ -289,7 +507,7 @@ sub ListToPython {
 
 	while (@list) {
 		my $item = shift @list;
-		my @statement = @{$item} if defined $item;
+		my @statement = @{$item} if defined $item and $item =~ /^ARRAY/;
 
 		if (defined $statement[0]) {
 			my %args = %{$statement[1]};
@@ -316,30 +534,50 @@ sub ListToPython {
 					$imports{"sys"}++;
 					push @python, ("sys.stdout.write(" . $string . ")");
 				}
-			} elsif ($statement[0] =~ /(if|while)/) {
+			} elsif ($statement[0] =~ /(if|while|elsif)/) {
+				my $type = $1;
+				$type =~ s/elsif/elif/;
 				my @statementArg = @{$args{"statement"}};
 				if ($statementArg[0] eq "expr") {
-					push @python, ("$1 " . &ExprToPython(@statementArg) . ":");
-					foreach $line (&ListToPython(@{$args{"commands"}}, 1)) {
+					push @python, ("$type " . &ExprToPython(@statementArg) . ":");
+					foreach my $line (&ListToPython(@{$args{"commands"}}, 1)) {
 						push @python, ("    " . $line);
 
 					}
 				}
+			} elsif ($statement[0] =~ /for/) { # c-style is impossible with the parsing so I've just done the "for $x (@a)" style
+				my $var = $args{"var"};
+				my $set = $args{"set"};
 
-				
+				if (@{$var}[0] eq "var") {
+					$var = &VarToPython(@{$var});
+				}
+
+				if (@{$set}[0] eq "var") {
+					$set = &VarToPython(@{$set});
+				} elsif (@{$set}[0] eq "range") {
+					my %rangeArgs = @{$set}[1];
+					my $left = $rangeArgs{"left"};
+					my $right = $rangeArgs{"right"};
+					$set = "range(".$left.", ".$right.")";
+				}
+
+				push @python, ("for ".$var." in ".$set.":");
+				foreach my $line (&ListToPython(@{$args{"commands"}}, 1)) {
+					push @python, ("    " . $line);
+				}
 			} elsif ($statement[0] eq "assign") {
 				my $left = $args{"left"};
-				my @leftArray = @{$left};
+				my @leftArray = @{$left} if defined $left and $left =~ /^ARRAY/;
 				if (@leftArray and ($leftArray[0] eq "var")) {
-					my %leftArgs = %{$leftArray[1]};
-					$left = $leftArgs{"name"};
+					$left = &VarToPython(@{$left});
 				}
 				my $right = $args{"right"};
-				my @rightArray = @{$right};
-				if (@rightArray and ($rightArray[0] eq "str")) {
-					$right = &StrToPython(@{$right});
-				} elsif (@rightArray and ($rightArray[0] eq "expr")) {
-					$right = &ExprToPython(@{$right});
+				my @rightArray = @{$right} if defined $right and $right =~ /^ARRAY/;
+				if (@rightArray and ($rightArray[0] eq "expr")) {
+					$right = &ExprToPython(@rightArray);
+				} elsif (@rightArray and ($rightArray[0] eq "str")) {
+					$right = &StrToPython(@rightArray);
 				}
 				push @python, ("$left = $right");
 			}
@@ -364,22 +602,23 @@ sub ListToPython {
 	return @python;
 }
 
-@perl = ();
+my @perl = ();
 
 undef $/;
 
-$string = <>;
+my $string = <>;
 
 $string =~ s/\n\n/\nBLANKLINE\n/g;
 
 # makes sure each statement and comment gets its own line
 $string =~ s/#/\n#/g;
-$string =~ s/;/\n/g;
+$string =~ s/;/\n/g; # this makes c-stype for loops really hard
 $string =~ s/{/{\n/g;
 $string =~ s/}/\n}\n/g;
 $string =~ s/(\s*\n+\s*)+/\n/g;
+$string =~ s/(\$[a-zA-Z][a-zA-Z0-9_]*)\s*(\.|\+|\-|\*)=/$1 = $1 $2/g;
 
-@perlTemp = split "\n", $string;
+my @perlTemp = split "\n", $string;
 
 foreach (@perlTemp) {
 	if ((defined $_) and !($_ =~ /^$/)) {
