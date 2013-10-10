@@ -1,0 +1,16 @@
+Date	Start	Stop	Activity
+01/10	18:20	19:20	Started work.
+01/10	20:00	22:20	Initial commit. Lots of things (see commit message).
+02/10	12:00	13:00	Not much. Ignores comment lines. I may need to rethink my approach.
+02/10	23:10	23:10	Committed today's work - I forgot!
+03/10	16:30	21:30	Starting over - new approach. Didn't work the whole time of course.
+04/10	15:30	17:30	Ifs and whiles done recursively.
+05/10	12:30	13:00	++ and -- and a big comment.
+05/10	2:30	3:30	Functions "StringToVar" and "StringToStr" completed implemented in the print function.
+06/10	16:30	18:30	Changed approach of StringToStr to fix bugs.
+06/10	23:15	23:30	Now maintains newlines.
+07/10	00:00	01:30	Wrapped variables being printed in a str() to avoid errors. Reworked a lot of &ListToPython, added helper functions for translation.
+07/10	11:00	11:10	Added last and next translation. Added more to test.pl
+09/10	7:30	9:00	Rewrote StringToExpr, now WORKS PROPERLY WOW
+09/10	9:30	11:00	Fixing various errors. Writing tests.
+09/10	11:00	12:00	Cutting it close. Fixing last minute bugs and writing demos and tests.

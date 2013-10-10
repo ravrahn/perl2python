@@ -19,7 +19,7 @@ use warnings;
 # operators are stored as, for example: ["oper", ">"]
 
 # Complex Types
-	# var - string type, string name
+	# var - string type, string name, expr index
 	# range - string start, string end
 	# assign - var left, expr|str right
 	# print - str string
@@ -34,14 +34,15 @@ use warnings;
 
 sub StringToVar {
 	# converts a string containing a perl variable
-	# to a 'var' - ["var", {"type"=>type, "name"=>name}]
+	# to a 'var' - ["var", {"type"=>type, "name"=>name, "index"=>index}]
 
 	my ($string) = @_;
 
 	my $type;
 	my $name;
+	my $index;
 
-	if ($string =~ /^(\$|@|%)([a-zA-Z][a-zA-Z0-9_]*)/) {
+	if ($string =~ /^\s*(\$|@|%)([a-zA-Z][a-zA-Z0-9_]*\s*$)/) {
 		if ($1 eq "\$") {
 			$type = "var";
 		} elsif ($1 eq "@") {
@@ -51,11 +52,20 @@ sub StringToVar {
 		}
 
 		$name = $2;
+		$index = "";
+	} elsif ($string =~ /^\s*\$([a-zA-Z][a-zA-Z0-9_]*)\[(.+?)\]\s*$/) {
+		$type = "var";
+		$name = $1;
+		$index = &StringToExpr($2);
+	} elsif ($string =~ /^\s*\$([a-zA-Z][a-zA-Z0-9_]*){(.+?)}\s*$/) {
+		$type = "dict";
+		$name = $1;
+		$index = &StringToExpr($2);
 	} else {
 		return $string;
 	}
 
-	return ["var", {"type"=>$type, "name"=>$name}];
+	return ["var", {"type"=>$type, "name"=>$name, "index"=>$index}];
 
 }
 
@@ -145,7 +155,7 @@ sub StringToExpr {
 	my @chars = ();
 	while (@string) { # go through char-by-char
 		my $char = shift @string;
-		if ($char =~ /\+|\^|\-|~|%|\.|\//) { # operators that cannot be the start of a multi-char operator
+		if ($char =~ /\+|\^|\-|~|%|\//) { # operators that cannot be the start of a multi-char operator
 			&operSplit($expr, $char, \@chars);
 			@chars = ();
 		# operators that can be the start of a multi-char operator
@@ -262,6 +272,35 @@ sub StringToExpr {
 					}
 					$i++;
 				}
+				if (defined $string[$varend]) {
+					if ($string[$varend] =~ /\[/) {
+						my $close = 0;
+						my $opens = 1;
+						while ($i <= $#string and $opens != 0) {
+							if ($string[$i] =~ /\]/) {
+								$close = $i;
+								$opens--;
+							} elsif ($string[$i] =~ /\[/) {
+								$opens++;
+							}
+							$i++;
+						}
+						$varend = $close+1;
+					} elsif ($string[$varend] =~ /{/) {
+						my $close = 0;
+						my $opens = 1;
+						while ($i <= $#string and $opens != 0) {
+							if ($string[$i] =~ /\}/) {
+								$close = $i;
+								$opens--;
+							} elsif ($string[$i] =~ /\{/) {
+								$opens++;
+							}
+							$i++;
+						}
+						$varend = $close+1;
+					}
+				}
 				my @arr = ($char);
 				foreach my $i (0..$varend-1) {
 					push @arr, shift @string;
@@ -313,6 +352,8 @@ sub StringToExpr {
 			}
 			shift @string;
 			push @{$expr}, &StringToStr("\"".(join "", @arr)."\"");
+		} elsif ($char =~ /\s/) {
+			# discard it - we're not in a string, so what's the harm?
 		} else {
 			# just add it to the array
 			push @chars, $char;
@@ -360,7 +401,23 @@ sub PerlToList {
 			}
 			my @subcommands = &PerlToList(@sublist);
 			push @list, ["$ifwhile", {"statement"=>&StringToExpr($statement), "commands"=>\@subcommands}];
-		
+		} elsif ($item =~ /else/) {
+			my @sublist = ();
+			my $endsToIgnore = 0;
+			while (1) {
+				my $subitem = shift @perl;
+				if ($subitem =~ /{$/) {
+					$endsToIgnore++;
+				}
+				if ($subitem =~ /^}$/ and $endsToIgnore == 0) {
+					last;
+				} elsif ($subitem =~ /^}$/) {
+					$endsToIgnore--;
+				}
+				push @sublist, $subitem;
+			}
+			my @subcommands = &PerlToList(@sublist);
+			push @list, ["else", {"commands"=>\@subcommands}];
 		} elsif ($item =~ /^(for|foreach)\s*(\$[a-zA-Z][a-zA-Z0-9_]*)\s*\((.*)\)/) {
 			my $var = &StringToVar($2);
 			my $set = $3;
@@ -379,8 +436,8 @@ sub PerlToList {
 				push @sublist, $subitem;
 			}
 
-			if ($set =~ /(.*)\.\.(.*)/) {
-				$set = ["range", {"left"=>$1, "right"=>$2}];
+			if ($set =~ /(.+)\.\.(.+)/) {
+				$set = ["range", {"left"=>&StringToExpr($1), "right"=>&StringToExpr($2)}];
 			} else {
 				$set = &StringToVar($set);
 			}
@@ -428,7 +485,7 @@ sub ExprToPython {
 	my (@expr) = @_;
 	my $python = "";
 
-	if (!($expr[0] eq "expr")) {
+	if ($expr[0] ne "expr") {
 		return @expr;
 	}
 
@@ -439,7 +496,8 @@ sub ExprToPython {
 			if (@{$_}[0] eq "str") {
 				$python = $python." (".&StrToPython(@{$_}).")";
 			} elsif (@{$_}[0] eq "var") {
-				$python = $python." ".&VarToPython(@{$_});
+				my ($var, $sys) = &VarToPython(@{$_});
+				$python = $python." ".$var;
 			} elsif (@{$_}[0] eq "expr") {
 				$python= $python."(".&ExprToPython(@{$_}).")";
 			}
@@ -469,7 +527,17 @@ sub VarToPython {
 
 	my %args = %{$var[1]};
 
-	return $args{"name"};
+	if ($args{"name"} eq "ARGV" and $args{"type"} eq "var") {
+		return ("int(sys.argv[".(&ExprToPython(@{$args{"index"}})+1)."])", 1);
+	} elsif ($args{"name"} eq "ARGV" and $args{"type"} eq "list") {
+		return ("sys.argv", 1);
+	}
+
+	if ($args{"index"} ne "") {
+		return ($args{"name"}."[".&ExprToPython($args{"index"})."]", 1);
+	}
+
+	return ($args{"name"}, 1);
 }
 
 sub StrToPython {
@@ -496,6 +564,7 @@ sub StrToPython {
 	return $python;
 }
 
+our %imports; # global, in case there's only need for imports inside recursive bits
 sub ListToPython {
 	# converts a list-based language-independant
 	# recursive data structure into a python file,
@@ -503,8 +572,7 @@ sub ListToPython {
 	my $noHeader = pop @_;
 	my (@list) = @_;
 	my @python = ();
-	my %imports;
-
+	
 	while (@list) {
 		my $item = shift @list;
 		my @statement = @{$item} if defined $item and $item =~ /^ARRAY/;
@@ -534,31 +602,42 @@ sub ListToPython {
 					$imports{"sys"}++;
 					push @python, ("sys.stdout.write(" . $string . ")");
 				}
-			} elsif ($statement[0] =~ /(if|while|elsif)/) {
+			} elsif ($statement[0] =~ /(if|while|elsif|else)/) {
 				my $type = $1;
 				$type =~ s/elsif/elif/;
-				my @statementArg = @{$args{"statement"}};
-				if ($statementArg[0] eq "expr") {
-					push @python, ("$type " . &ExprToPython(@statementArg) . ":");
+				if ($type ne "else") {
+					my @statementArg = @{$args{"statement"}};
+					if ($statementArg[0] eq "expr") {
+						push @python, ("$type " . &ExprToPython(@statementArg) . ":");
+						foreach my $line (&ListToPython(@{$args{"commands"}}, 1)) {
+							push @python, ("    " . $line);
+
+						}
+					}
+				} else {
+					push @python, "else:";
 					foreach my $line (&ListToPython(@{$args{"commands"}}, 1)) {
 						push @python, ("    " . $line);
-
 					}
 				}
 			} elsif ($statement[0] =~ /for/) { # c-style is impossible with the parsing so I've just done the "for $x (@a)" style
 				my $var = $args{"var"};
 				my $set = $args{"set"};
+				my $needsSys = 0;
 
 				if (@{$var}[0] eq "var") {
-					$var = &VarToPython(@{$var});
+					($var, $needsSys) = &VarToPython(@{$var});
+					$imports{"sys"} += $needsSys;
 				}
 
 				if (@{$set}[0] eq "var") {
-					$set = &VarToPython(@{$set});
+					($set, $needsSys) = &VarToPython(@{$set});
+					$imports{"sys"} += $needsSys;
 				} elsif (@{$set}[0] eq "range") {
-					my %rangeArgs = @{$set}[1];
-					my $left = $rangeArgs{"left"};
-					my $right = $rangeArgs{"right"};
+					my %rangeArgs = %{@{$set}[1]};
+					my $left = &ExprToPython(@{$rangeArgs{"left"}});
+					my $right = &ExprToPython(@{$rangeArgs{"right"}});
+
 					$set = "range(".$left.", ".$right.")";
 				}
 
@@ -567,10 +646,12 @@ sub ListToPython {
 					push @python, ("    " . $line);
 				}
 			} elsif ($statement[0] eq "assign") {
+				my $needsSys = 0;
 				my $left = $args{"left"};
 				my @leftArray = @{$left} if defined $left and $left =~ /^ARRAY/;
 				if (@leftArray and ($leftArray[0] eq "var")) {
-					$left = &VarToPython(@{$left});
+					($left, $needsSys) = &VarToPython(@{$left});
+					$imports{"sys"} += $needsSys;
 				}
 				my $right = $args{"right"};
 				my @rightArray = @{$right} if defined $right and $right =~ /^ARRAY/;
